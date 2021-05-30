@@ -5,30 +5,36 @@ use std::cmp::Ordering;
 use std::fs;
 use std::io;
 use std::io::Write;
+use std::path;
 
 pub struct Chunk {
-    pub file: fs::File,
     pub capacity: u64,
     pub rough_count: file_utils::RoughCount,
+    pub file_path: String,
 }
 
 impl Chunk {
-    pub fn new(f: fs::File, cap: u64) -> io::Result<Chunk> {
-        let rc = file_utils::count_roughly(&f)?;
+    pub fn new(file_path: &str, cap: u64) -> io::Result<Chunk> {
+        let path = path::Path::new(file_path);
+        let file = fs::File::open(path)?;
+        let rc = file_utils::count_roughly(&file)?;
 
         Ok(Chunk {
+            file_path: file_path.to_string(),
             capacity: cap,
-            file: f,
             rough_count: rc,
         })
     }
 
-    pub fn fit_in_buffer(&self) -> bool {
-        self.file.metadata().unwrap().len() <= self.capacity
+    pub fn fit_in_buffer(&self) -> io::Result<bool> {
+        let path = path::Path::new(&self.file_path);
+        let file = fs::File::open(path).unwrap();
+        Ok(file.metadata().unwrap().len() <= self.capacity)
     }
 
     pub fn sort(&self, cmp: fn(&String, &String) -> Ordering) -> io::Result<Chunk> {
-        let mut reader = io::BufReader::new(&self.file);
+        let src_file = fs::File::open(path::Path::new(&self.file_path))?;
+        let mut reader = io::BufReader::new(src_file);
         let mut lines = vec![];
         let mut buf = String::new();
 
@@ -38,24 +44,41 @@ impl Chunk {
         }
 
         lines.sort_unstable_by(cmp);
-        let mut writer = io::BufWriter::new(tempfile::tempfile()?);
+
+        let dst_path = file_utils::temppath();
+        let dst_file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&dst_path)?;
+        let mut writer = io::BufWriter::new(dst_file);
 
         for l in lines {
             writer.write(l.as_bytes())?;
         }
 
-        let file = writer.into_inner()?;
-        file_utils::rewind(&file)?;
-        Chunk::new(file, self.capacity)
+        Ok(Chunk::new(dst_path.to_str().unwrap(), self.capacity)?)
     }
 
     pub fn split(&self) -> io::Result<(Chunk, Chunk)> {
         assert!(self.rough_count == RoughCount::Two || self.rough_count == RoughCount::ThreeOrMore);
 
-        let mid = self.file.metadata().unwrap().len() / 2;
-        let mut reader = io::BufReader::new(&self.file);
-        let mut writer1 = io::BufWriter::new(tempfile::tempfile().unwrap());
-        let mut writer2 = io::BufWriter::new(tempfile::tempfile().unwrap());
+        let src_file = fs::File::open(&self.file_path)?;
+        let mid = src_file.metadata()?.len() / 2;
+        let mut reader = io::BufReader::new(src_file);
+
+        let c1_path = file_utils::temppath();
+        let c2_path = file_utils::temppath();
+        let c1_file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&c1_path)?;
+        let c2_file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&c2_path)?;
+        let mut writer1 = io::BufWriter::new(&c1_file);
+        let mut writer2 = io::BufWriter::new(&c2_file);
+
         let mut sum = 0;
         let mut buf = String::new();
 
@@ -74,14 +97,9 @@ impl Chunk {
             buf.clear();
         }
 
-        let file1 = writer1.into_inner()?;
-        file_utils::rewind(&file1)?;
-        let file2 = writer2.into_inner()?;
-        file_utils::rewind(&file2)?;
-
         Ok((
-            Chunk::new(file1, self.capacity)?,
-            Chunk::new(file2, self.capacity)?,
+            Chunk::new(c1_path.to_str().unwrap(), self.capacity)?,
+            Chunk::new(c2_path.to_str().unwrap(), self.capacity)?,
         ))
     }
 }

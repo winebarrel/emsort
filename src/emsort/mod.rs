@@ -8,6 +8,7 @@ use std::cmp::Ordering;
 use std::fs;
 use std::io;
 use std::io::Write;
+use std::path;
 
 fn default_compare(a: &String, b: &String) -> Ordering {
     let a = a.trim_end_matches(|c| c == '\r' || c == '\n');
@@ -16,7 +17,7 @@ fn default_compare(a: &String, b: &String) -> Ordering {
 }
 
 pub fn sort<T>(
-    fin: fs::File,
+    path: &str,
     fout: T,
     cap: u64,
     opt_cmp: Option<fn(&String, &String) -> Ordering>,
@@ -25,9 +26,13 @@ where
     T: io::Write,
 {
     let cmp = opt_cmp.unwrap_or(default_compare);
-    let chunk = Chunk::new(fin, cap)?;
+    let remove_dir = file_utils::create_directory()?;
+    let chunk = Chunk::new(path, cap)?;
     let sorted = sort_chunk(chunk, cmp)?;
-    file_utils::copy(&sorted.file, fout)
+    let file = fs::File::open(sorted.file_path)?;
+    file_utils::copy(&file, fout)?;
+    drop(remove_dir);
+    Ok(())
 }
 
 fn sort_chunk(chunk: Chunk, cmp: fn(&String, &String) -> Ordering) -> io::Result<Chunk> {
@@ -35,7 +40,7 @@ fn sort_chunk(chunk: Chunk, cmp: fn(&String, &String) -> Ordering) -> io::Result
         return Ok(chunk);
     }
 
-    if chunk.fit_in_buffer() {
+    if chunk.fit_in_buffer()? {
         return chunk.sort(cmp);
     }
 
@@ -46,12 +51,22 @@ fn sort_chunk(chunk: Chunk, cmp: fn(&String, &String) -> Ordering) -> io::Result
 fn merge(c1: Chunk, c2: Chunk, cmp: fn(&String, &String) -> Ordering) -> io::Result<Chunk> {
     assert!(c1.capacity == c2.capacity);
 
-    let mut reader1 = io::BufReader::new(&c1.file);
-    let mut reader2 = io::BufReader::new(&c2.file);
-    let mut writer = io::BufWriter::new(tempfile::tempfile()?);
+    let c1_path = path::Path::new(&c1.file_path);
+    let c2_path = path::Path::new(&c2.file_path);
+    let c1_file = fs::File::open(c1_path)?;
+    let c2_file = fs::File::open(c2_path)?;
+    let mut reader1 = io::BufReader::new(c1_file);
+    let mut reader2 = io::BufReader::new(c2_file);
+
+    let dst_path = file_utils::temppath();
+    let dst_file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(&dst_path)?;
+    let mut writer = io::BufWriter::new(dst_file);
+
     let mut r1_buf = String::new();
     let mut r2_buf = String::new();
-
     let mut r1_read = reader1.read_line(&mut r1_buf)?;
     let mut r2_read = reader2.read_line(&mut r2_buf)?;
 
@@ -81,6 +96,5 @@ fn merge(c1: Chunk, c2: Chunk, cmp: fn(&String, &String) -> Ordering) -> io::Res
         r2_read = reader2.read_line(&mut r2_buf)?
     }
 
-    let cap = c1.capacity;
-    Ok(Chunk::new(writer.into_inner()?, cap)?)
+    Ok(Chunk::new(dst_path.to_str().unwrap(), c1.capacity)?)
 }

@@ -1,8 +1,11 @@
 use io::prelude::BufRead;
+use std::env;
 use std::fs;
 use std::io;
 use std::io::Seek;
 use std::io::Write;
+use std::path;
+use std::process;
 
 #[derive(Debug, PartialEq)]
 pub enum RoughCount {
@@ -39,10 +42,6 @@ pub fn count_roughly(f: &fs::File) -> io::Result<RoughCount> {
     Ok(rc)
 }
 
-pub fn rewind(mut f: &fs::File) -> io::Result<u64> {
-    f.seek(io::SeekFrom::Start(0))
-}
-
 pub fn copy<T>(fin: &fs::File, fout: T) -> io::Result<()>
 where
     T: io::Write,
@@ -57,4 +56,34 @@ where
     }
 
     Ok(())
+}
+
+pub fn tempdir() -> path::PathBuf {
+    let dir = env::temp_dir();
+    dir.join(format!("emsort-{}", process::id()))
+}
+
+pub struct RemoveDir {
+    dir: path::PathBuf,
+}
+
+impl Drop for RemoveDir {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.dir).unwrap();
+    }
+}
+
+pub fn create_directory() -> io::Result<RemoveDir> {
+    let dir = tempdir();
+    let rs = fs::create_dir(&dir);
+
+    match rs {
+        Ok(_) => Ok(RemoveDir { dir: dir }),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn temppath() -> path::PathBuf {
+    let id = ulid::Ulid::new().to_string();
+    tempdir().join(id.to_string())
 }
