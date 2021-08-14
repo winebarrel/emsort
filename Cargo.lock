@@ -22,9 +22,9 @@ dependencies = [
 
 [[package]]
 name = "ex_merge_sort"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e8ff5609f42ad3d2b1f49876c48654088763d555c608c28d0cc60e889799f8c"
+checksum = "5fd7c03b83ca3e3c27e60605bb39b282eb1c6f69acb4003481bb62ba5de24eac"
 dependencies = [
  "tempfile",
 ]
