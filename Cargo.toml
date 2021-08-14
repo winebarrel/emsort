@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 getopts = "0.2"
-ex_merge_sort = "0.3.0"
+ex_merge_sort = "0.4"
