@@ -40,7 +40,12 @@ fn sort_chunk(chunk: Chunk, cmp: fn(&String, &String) -> Ordering) -> io::Result
     }
 
     let (c1, c2) = chunk.split()?;
-    Ok(merge(sort_chunk(c1, cmp)?, sort_chunk(c2, cmp)?, cmp)?)
+
+    if c2.rough_count == RoughCount::Zero {
+        return c1.sort(cmp);
+    } else {
+        Ok(merge(sort_chunk(c1, cmp)?, sort_chunk(c2, cmp)?, cmp)?)
+    }
 }
 
 fn merge(c1: Chunk, c2: Chunk, cmp: fn(&String, &String) -> Ordering) -> io::Result<Chunk> {
