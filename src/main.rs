@@ -1,5 +1,5 @@
 mod cli;
-mod emsort;
+use ex_merge_sort;
 
 use std::fs;
 use std::io;
@@ -7,5 +7,5 @@ use std::io;
 fn main() -> io::Result<()> {
     let opts = cli::parse_opts();
     let f = fs::File::open(opts.file)?;
-    emsort::sort(f, io::stdout(), opts.capacity, None)
+    ex_merge_sort::sort(f, io::stdout(), opts.capacity, None)
 }

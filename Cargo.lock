@@ -16,7 +16,16 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "emsort"
 version = "0.1.0"
 dependencies = [
+ "ex_merge_sort",
  "getopts",
+]
+
+[[package]]
+name = "ex_merge_sort"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e8ff5609f42ad3d2b1f49876c48654088763d555c608c28d0cc60e889799f8c"
+dependencies = [
  "tempfile",
 ]
 
